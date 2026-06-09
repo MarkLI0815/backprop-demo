@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>神經網路怎麼學會判斷？</title>
+  <style>
+    :root {
+      --ink: #141824;
+      --muted: #667085;
+      --paper: #f5f7fb;
+      --panel: #fff;
+      --line: #d8e0ec;
+      --blue: #21649c;
+      --blue-dark: #143d66;
+      --red: #d94b3d;
+      --green: #239263;
+      --yellow: #f5c542;
+      --soft-blue: #eef6ff;
+      --soft-red: #fff1ef;
+      --soft-green: #ebf8f1;
+      --shadow: 0 18px 42px rgba(18, 31, 53, .12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: linear-gradient(180deg, #fff 0%, var(--paper) 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+    }
+
+    button { font: inherit; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .9);
+      backdrop-filter: blur(12px);
+    }
+
+    h1, h2, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(24px, 2.8vw, 40px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      min-height: 42px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 900;
+      box-shadow: 0 6px 15px rgba(18, 31, 53, .06);
+    }
+
+    .btn.primary {
+      color: #fff;
+      border-color: var(--blue);
+      background: var(--blue);
+    }
+
+    .progress {
+      min-width: 88px;
+      color: var(--blue-dark);
+      text-align: center;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .main {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      grid-template-columns: minmax(310px, .78fr) minmax(560px, 1.28fr) minmax(330px, .9fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, .88);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .story {
+      padding: 22px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 16px;
+    }
+
+    .step-label {
+      color: var(--blue-dark);
+      font-size: 14px;
+      font-weight: 950;
+    }
+
+    .story h2 {
+      margin-top: 8px;
+      font-size: clamp(22px, 2vw, 32px);
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .story-text {
+      margin-top: 14px;
+      color: #26384f;
+      font-size: 18px;
+      line-height: 1.7;
+      font-weight: 750;
+      white-space: pre-line;
+    }
+
+    .concept {
+      padding: 14px;
+      border-radius: 8px;
+      background: var(--soft-blue);
+      color: var(--blue-dark);
+      font-size: 16px;
+      line-height: 1.55;
+      font-weight: 900;
+    }
+
+    .roles {
+      display: grid;
+      gap: 8px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: #344054;
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 750;
+    }
+
+    .roles b { color: var(--ink); }
+
+    .diagram {
+      position: relative;
+      min-height: 640px;
+      padding: 18px;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      min-height: 600px;
+      display: block;
+    }
+
+    .zone-title {
+      fill: var(--muted);
+      font-size: 17px;
+      font-weight: 950;
+      text-anchor: middle;
+    }
+
+    .edge {
+      fill: none;
+      stroke: #9aa6b6;
+      stroke-width: 4;
+      stroke-linecap: round;
+      opacity: .55;
+      transition: stroke .25s ease, stroke-width .25s ease, opacity .25s ease;
+    }
+
+    .edge.active {
+      stroke: var(--blue);
+      stroke-width: 8;
+      opacity: 1;
+    }
+
+    .edge.red { stroke: var(--red); }
+    .edge.green { stroke: var(--green); }
+    .edge.yellow { stroke: var(--yellow); }
+
+    .node circle {
+      fill: url(#nodeFill);
+      stroke: #d7e7f4;
+      stroke-width: 5;
+      filter: drop-shadow(0 10px 14px rgba(18, 31, 53, .2));
+      transition: stroke .25s ease, stroke-width .25s ease, filter .25s ease;
+    }
+
+    .node.active circle {
+      stroke: var(--yellow);
+      stroke-width: 8;
+      filter: drop-shadow(0 0 18px rgba(245, 197, 66, .75));
+    }
+
+    .node text {
+      fill: #fff;
+      text-anchor: middle;
+      dominant-baseline: central;
+      font-weight: 950;
+    }
+
+    .symbol {
+      font-size: 36px;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    .node-value { font-size: 13px; opacity: .95; }
+
+    .node-note {
+      fill: #24344d;
+      font-size: 16px;
+      font-weight: 900;
+      text-anchor: middle;
+      paint-order: stroke;
+      stroke: #fff;
+      stroke-width: 6px;
+      stroke-linejoin: round;
+    }
+
+    .edge-label {
+      fill: #111827;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 23px;
+      font-weight: 950;
+      text-anchor: middle;
+      paint-order: stroke;
+      stroke: #fff;
+      stroke-width: 6px;
+      stroke-linejoin: round;
+    }
+
+    .flow {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+
+    .flow.visible { opacity: 1; }
+
+    .flow rect {
+      fill: rgba(255, 255, 255, .96);
+      stroke: currentColor;
+      stroke-width: 3;
+      filter: drop-shadow(0 7px 12px rgba(18, 31, 53, .18));
+    }
+
+    .flow text {
+      fill: #101828;
+      font-size: 13px;
+      font-weight: 950;
+      text-anchor: middle;
+      dominant-baseline: central;
+      paint-order: stroke;
+      stroke: #fff;
+      stroke-width: 3px;
+    }
+
+    .flow.blue { color: var(--blue); }
+    .flow.red { color: var(--red); }
+    .flow.green { color: var(--green); }
+    .flow.yellow { color: #b67600; }
+
+    .result-card, .truth-card, .loss-card {
+      position: absolute;
+      right: 24px;
+      width: 260px;
+      padding: 13px 15px;
+      border-radius: 8px;
+      background: #fff;
+      border: 2px solid var(--line);
+      box-shadow: 0 12px 28px rgba(18, 31, 53, .1);
+      transition: opacity .25s ease, transform .25s ease;
+    }
+
+    .result-card { top: 36px; border-color: rgba(33, 100, 156, .2); }
+    .truth-card { top: 160px; border-color: rgba(217, 75, 61, .25); background: var(--soft-red); }
+    .loss-card { top: 286px; border-color: rgba(217, 75, 61, .28); }
+
+    .result-card.hidden, .truth-card.hidden, .loss-card.hidden {
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+    }
+
+    .card-label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 950;
+    }
+
+    .card-value {
+      margin-top: 4px;
+      font-size: 24px;
+      line-height: 1.2;
+      font-weight: 950;
+    }
+
+    .loss-bar {
+      height: 12px;
+      margin-top: 10px;
+      border-radius: 999px;
+      background: #ffe1dd;
+      overflow: hidden;
+    }
+
+    .loss-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: var(--red);
+      transition: width .35s ease;
+    }
+
+    .calc {
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+    }
+
+    .calc h2 {
+      color: var(--blue-dark);
+      font-size: 20px;
+    }
+
+    .formula-box {
+      padding: 16px;
+      border-radius: 8px;
+      background: #101828;
+      color: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 15px;
+      line-height: 1.72;
+      white-space: pre-line;
+      min-height: 230px;
+    }
+
+    .compare {
+      display: grid;
+      gap: 8px;
+    }
+
+    .compare-row {
+      display: grid;
+      grid-template-columns: 1.2fr .7fr .7fr .9fr;
+      gap: 6px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: #344054;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .compare-row.header {
+      background: var(--soft-blue);
+      color: var(--blue-dark);
+    }
+
+    .compare-row.good { background: var(--soft-green); color: #145b3d; }
+    .compare-row.bad { background: var(--soft-red); color: #7a271a; }
+
+    .loop {
+      padding: 14px;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: #344054;
+      font-size: 14px;
+      line-height: 1.55;
+      font-weight: 800;
+      white-space: pre-line;
+    }
+
+    @media (max-width: 1120px) {
+      .main { grid-template-columns: 1fr; }
+      .diagram { min-height: 580px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (max-width: 680px) {
+      .topbar, .main { padding-left: 12px; padding-right: 12px; }
+      .controls { width: 100%; }
+      .btn { flex: 1; }
+      .result-card, .truth-card, .loss-card {
+        position: static;
+        width: auto;
+        margin: 8px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <h1>神經網路怎麼學會判斷？</h1>
+        <p class="subtitle">任務：模型要判斷一個人是不是詐騙集團車手。</p>
+      </div>
+      <div class="controls" aria-label="演示控制">
+        <button class="btn" id="prevBtn" type="button">上一步</button>
+        <button class="btn primary" id="nextBtn" type="button">下一步</button>
+        <button class="btn" id="resetBtn" type="button">重新播放</button>
+        <span class="progress" id="progressText">1 / 20</span>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="panel story">
+        <div>
+          <div class="step-label" id="stepLabel">第 1 步</div>
+          <h2 id="stepTitle">任務開場</h2>
+          <p class="story-text" id="stepText"></p>
+        </div>
+        <div class="concept" id="conceptBox"></div>
+        <div class="roles">
+          <div><b>x1 / x2</b>：輸入資料，只是線索。</div>
+          <div><b>w / v</b>：權重，模型保存下來的經驗值。</div>
+          <div><b>a1 / a2</b>：這一次算出來的小判斷，不是長期經驗。</div>
+          <div><b>ŷ / y / Loss</b>：預測、真實答案、錯誤程度。</div>
+        </div>
+      </section>
+
+      <section class="panel diagram">
+        <svg viewBox="0 0 900 650" role="img" aria-labelledby="chartTitle chartDesc">
+          <title id="chartTitle">神經網路訓練流程</title>
+          <desc id="chartDesc">線索經過權重形成小判斷，再形成預測，最後用錯誤回頭調整權重。</desc>
+          <defs>
+            <linearGradient id="nodeFill" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#2e6fa5"></stop>
+              <stop offset="1" stop-color="#123961"></stop>
+            </linearGradient>
+          </defs>
+
+          <text class="zone-title" x="120" y="36">左：線索</text>
+          <text class="zone-title" x="425" y="36">中：小判斷員</text>
+          <text class="zone-title" x="720" y="36">右：最後答案</text>
+
+          <path class="edge" id="w11Edge" d="M 155 170 L 375 170"></path>
+          <path class="edge" id="w12Edge" d="M 155 170 L 375 420"></path>
+          <path class="edge" id="w21Edge" d="M 155 420 L 375 170"></path>
+          <path class="edge" id="w22Edge" d="M 155 420 L 375 420"></path>
+          <path class="edge" id="v1Edge" d="M 475 170 L 660 295"></path>
+          <path class="edge" id="v2Edge" d="M 475 420 L 660 295"></path>
+          <path class="edge" id="outEdge" d="M 760 295 L 850 295"></path>
+
+          <text class="edge-label" id="w11Label" x="265" y="148">w11=1.0</text>
+          <text class="edge-label" id="w12Label" x="245" y="292">w12=0.2</text>
+          <text class="edge-label" id="w21Label" x="288" y="322">w21=0.5</text>
+          <text class="edge-label" id="w22Label" x="265" y="450">w22=0.1</text>
+          <text class="edge-label" id="v1Label" x="575" y="205">v1=1.0</text>
+          <text class="edge-label" id="v2Label" x="575" y="390">v2=0.5</text>
+
+          <g class="node" id="x1Node" transform="translate(105 170)">
+            <circle r="56"></circle>
+            <text class="symbol" x="0" y="-9">x1</text>
+            <text class="node-value" id="x1Value" x="0" y="27">0.8</text>
+          </g>
+          <text class="node-note" x="105" y="244">車速線索</text>
+
+          <g class="node" id="x2Node" transform="translate(105 420)">
+            <circle r="56"></circle>
+            <text class="symbol" x="0" y="-9">x2</text>
+            <text class="node-value" id="x2Value" x="0" y="27">0.3</text>
+          </g>
+          <text class="node-note" x="105" y="494">停留時間線索</text>
+
+          <g class="node" id="a1Node" transform="translate(425 170)">
+            <circle r="56"></circle>
+            <text class="symbol" x="0" y="-9">a1</text>
+            <text class="node-value" id="a1Value" x="0" y="27">等待</text>
+          </g>
+          <text class="node-note" x="425" y="244">小判斷員 1</text>
+
+          <g class="node" id="a2Node" transform="translate(425 420)">
+            <circle r="56"></circle>
+            <text class="symbol" x="0" y="-9">a2</text>
+            <text class="node-value" id="a2Value" x="0" y="27">等待</text>
+          </g>
+          <text class="node-note" x="425" y="494">小判斷員 2</text>
+
+          <g class="node" id="yhatNode" transform="translate(710 295)">
+            <circle r="62"></circle>
+            <text class="symbol" x="0" y="-9">ŷ</text>
+            <text class="node-value" id="yhatValue" x="0" y="30">等待</text>
+          </g>
+          <text class="node-note" x="710" y="378">模型預測</text>
+        </svg>
+
+        <div class="result-card hidden" id="resultCard">
+          <div class="card-label">模型預測 ŷ</div>
+          <div class="card-value" id="resultValue">0.95</div>
+        </div>
+        <div class="truth-card hidden" id="truthCard">
+          <div class="card-label">真實答案 y</div>
+          <div class="card-value">0：不是車手</div>
+        </div>
+        <div class="loss-card hidden" id="lossCard">
+          <div class="card-label">錯誤程度 Loss</div>
+          <div class="card-value" id="lossValue">0.9025</div>
+          <div class="loss-bar"><div class="loss-fill" id="lossFill"></div></div>
+        </div>
+      </section>
+
+      <section class="panel calc">
+        <h2>數字計算</h2>
+        <div class="formula-box" id="formulaBox"></div>
+        <div class="compare" id="compareBox"></div>
+        <div class="loop" id="loopBox"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const edgeIds = ["w11Edge", "w12Edge", "w21Edge", "w22Edge", "v1Edge", "v2Edge", "outEdge"];
+    const nodeIds = ["x1Node", "x2Node", "a1Node", "a2Node", "yhatNode"];
+    const valueIds = ["x1Value", "x2Value", "a1Value", "a2Value", "yhatValue"];
+    const flows = {};
+    let current = 0;
+
+    const steps = [
+      {
+        title: "任務開場",
+        text: "模型要判斷一個人是不是詐騙集團車手。\n模型目前還不知道答案，它只能根據線索判斷。",
+        concept: "神經網路不是一開始就知道答案。它是根據輸入資料做判斷。",
+        activeNodes: [],
+        activeEdges: [],
+        values: { x1Value: "等待", x2Value: "等待", a1Value: "等待", a2Value: "等待", yhatValue: "等待" },
+        formula: "任務：判斷是不是車手\n\n輸入線索 → 中間判斷 → 最後預測",
+        compare: [],
+        loop: "今天先看一筆資料怎麼被模型處理。"
+      },
+      {
+        title: "輸入兩個線索 x1 / x2",
+        text: "x1 = 車速 = 0.8\nx2 = 停留時間 = 0.3\n它們只是資料，還不是答案。",
+        concept: "x 不是經驗。x 只是輸入資料。",
+        activeNodes: ["x1Node", "x2Node"],
+        activeEdges: [],
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "等待", a2Value: "等待", yhatValue: "等待" },
+        formula: "車速：████████░░ 0.8\n停留：███░░░░░░░ 0.3",
+        compare: [],
+        loop: "左邊的兩個圓就是這次輸入的線索。"
+      },
+      {
+        title: "出現神經網路結構",
+        text: "資料不是直接變成答案。\n它會先形成中間判斷，再產生最後預測。",
+        concept: "線索 → 中間判斷 → 最後答案",
+        activeNodes: nodeIds,
+        activeEdges: edgeIds,
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "等待", a2Value: "等待", yhatValue: "等待" },
+        formula: "左：線索 x1 / x2\n中：小判斷員 a1 / a2\n右：模型預測 ŷ",
+        compare: [],
+        loop: "先記住三區：左邊資料，中間判斷，右邊答案。"
+      },
+      {
+        title: "介紹權重 w",
+        text: "每條線上都有權重 w。\nw 代表模型目前有多重視這條線索。",
+        concept: "w 才像模型的經驗值。w 越大，這條線索越有影響力。",
+        activeNodes: ["x1Node", "x2Node", "a1Node"],
+        activeEdges: ["w11Edge", "w21Edge"],
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "等待", a2Value: "等待", yhatValue: "等待" },
+        formula: "w11 = 1.0  線比較粗\nw21 = 0.5  線比較細\n\nx 是線索\nw 是重視程度",
+        compare: [],
+        loop: "不要把 a1/a2 說成經驗；經驗存在 w 和 v 裡。"
+      },
+      {
+        title: "計算小判斷員 a1",
+        text: "x1 和 x2 經過權重後，合成 a1 的初步看法。",
+        concept: "a1 是這一次資料算出來的中間判斷，不是長期經驗。",
+        activeNodes: ["x1Node", "x2Node", "a1Node"],
+        activeEdges: ["w11Edge", "w21Edge"],
+        flow: { w11Edge: "0.8×1.0=0.8", w21Edge: "0.3×0.5=0.15" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "等待", yhatValue: "等待" },
+        formula: "a1 = w11 × x1 + w21 × x2\n\n a1 = 1.0 × 0.8 + 0.5 × 0.3\n a1 = 0.8 + 0.15\n a1 = 0.95",
+        compare: [],
+        loop: "a1：我覺得他很像車手，分數 0.95。"
+      },
+      {
+        title: "計算小判斷員 a2",
+        text: "a2 也看同一批線索，但權重不同，所以想法不同。",
+        concept: "模型內部可以有多個中間判斷。",
+        activeNodes: ["x1Node", "x2Node", "a2Node"],
+        activeEdges: ["w12Edge", "w22Edge"],
+        flow: { w12Edge: "0.8×0.2=0.16", w22Edge: "0.3×0.1=0.03" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "等待" },
+        formula: "a2 = 0.30\n\n簡化講法：\na2：我覺得他不太像車手。",
+        compare: [],
+        loop: "a1 和 a2 不是經驗；它們是這一次算出來的小看法。"
+      },
+      {
+        title: "介紹輸出層權重 v",
+        text: "v 代表最後輸出有多相信每個小判斷員。",
+        concept: "v1 大：最後答案比較聽 a1。v2 小：最後答案比較少聽 a2。",
+        activeNodes: ["a1Node", "a2Node", "yhatNode"],
+        activeEdges: ["v1Edge", "v2Edge"],
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "等待" },
+        formula: "v1 = 1.0\nv2 = 0.5\n\nv 是小判斷員到最後輸出的權重。",
+        compare: [],
+        loop: "前面的 w 管線索到小判斷員；後面的 v 管最後答案聽誰。"
+      },
+      {
+        title: "算出最後預測 ŷ",
+        text: "輸出層把 a1、a2 的意見加權合起來，得到模型預測。",
+        concept: "ŷ 是模型目前猜出來的答案，不是正確答案。",
+        activeNodes: ["a1Node", "a2Node", "yhatNode"],
+        activeEdges: ["v1Edge", "v2Edge", "outEdge"],
+        flow: { v1Edge: "0.8×1.0=0.8", v2Edge: "0.3×0.5=0.15", outEdge: "0.95" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.95" },
+        result: "0.95：95% 是車手",
+        formula: "ŷ = v1 × a1 + v2 × a2\n\n ŷ = 1.0 × 0.8 + 0.5 × 0.3\n ŷ = 0.8 + 0.15\n ŷ = 0.95",
+        compare: [],
+        loop: "現在模型很有信心地猜：他是車手。"
+      },
+      {
+        title: "公布真實答案 y",
+        text: "真實答案 y = 0。\n他不是車手，是送外賣的大叔。",
+        concept: "模型需要真實答案 y，才能知道自己有沒有猜錯。",
+        activeNodes: ["yhatNode"],
+        activeEdges: ["outEdge"],
+        edgeColors: { outEdge: "red" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.95" },
+        result: "預測 ŷ = 0.95",
+        truth: true,
+        formula: "模型預測：0.95\n真實答案：0\n\n模型猜錯了。",
+        compare: [],
+        loop: "沒有 y，模型就不知道自己錯了多少。"
+      },
+      {
+        title: "計算錯誤程度 Loss",
+        text: "Loss 是預測答案和真實答案之間的差距。\nLoss 越大，代表模型錯越多。",
+        concept: "初學者先把 Loss 理解成：模型這次犯錯的分數。",
+        activeNodes: ["yhatNode"],
+        activeEdges: ["outEdge"],
+        edgeColors: { outEdge: "red" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.95" },
+        result: "預測 ŷ = 0.95",
+        truth: true,
+        loss: "0.9025",
+        lossWidth: 90,
+        formula: "Loss = (ŷ - y)²\nLoss = (0.95 - 0)²\nLoss = 0.9025",
+        compare: [],
+        loop: "錯誤程度很高，所以需要檢討。"
+      },
+      {
+        title: "進入倒傳遞檢討會",
+        text: "倒傳遞不是重新猜答案。\n倒傳遞是在找：哪些權重讓錯誤變大？",
+        concept: "從錯誤往回檢討：Loss → ŷ → v → a → w。",
+        activeNodes: ["yhatNode", "a1Node", "a2Node"],
+        activeEdges: ["v1Edge", "v2Edge"],
+        edgeColors: { v1Edge: "red", v2Edge: "red" },
+        flowMode: "backward",
+        flow: { v1Edge: "回頭檢討", v2Edge: "回頭檢討" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.95" },
+        result: "預測 ŷ = 0.95",
+        truth: true,
+        loss: "0.9025",
+        lossWidth: 90,
+        formula: "問題：這次為什麼會錯？\n\n先問最後輸出：\n你剛剛太相信誰？",
+        compare: [],
+        loop: "這就是案件檢討會。"
+      },
+      {
+        title: "先檢討 v1",
+        text: "a1 很相信他是車手，O 又很相信 a1。\n如果真實答案不是車手，就要檢查 O 是否太相信 a1。",
+        concept: "如果 a1 把答案往錯的方向推，就要檢討 v1。",
+        activeNodes: ["a1Node", "yhatNode"],
+        activeEdges: ["v1Edge"],
+        edgeColors: { v1Edge: "red" },
+        flowMode: "backward",
+        flow: { v1Edge: "檢討 v1" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.95" },
+        result: "預測 ŷ = 0.95",
+        truth: true,
+        loss: "0.9025",
+        lossWidth: 90,
+        formula: "a1 = 0.8\nv1 = 1.0\n\nO 很聽 a1。\na1 又把答案推向「是車手」。",
+        compare: [],
+        loop: "故事版：O 可能太聽 a1 了。"
+      },
+      {
+        title: "測試：如果 v1 變大",
+        text: "把 v1 調高看看。\n結果 ŷ 變大，Loss 也變大。",
+        concept: "v1 增加會讓 Loss 增加，所以 v1 不應該調高。",
+        activeNodes: ["a1Node", "yhatNode"],
+        activeEdges: ["v1Edge"],
+        edgeColors: { v1Edge: "red" },
+        flow: { v1Edge: "v1 變大" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "1.03" },
+        result: "ŷ：0.95 → 1.03",
+        truth: true,
+        loss: "1.0609",
+        lossWidth: 100,
+        formula: "如果 v1：1.0 → 1.1\n\nŷ：0.95 → 1.03\nLoss：0.9025 → 1.0609",
+        compare: [
+          ["情況", "v1", "ŷ", "Loss", "header"],
+          ["原本", "1.0", "0.95", "0.9025", ""],
+          ["v1 調高", "1.1", "1.03", "1.0609", "bad"]
+        ],
+        loop: "錯誤變大，這不是好方向。"
+      },
+      {
+        title: "測試：如果 v1 變小",
+        text: "把 v1 調低看看。\n結果 ŷ 變小，Loss 也變小。",
+        concept: "v1 變小，錯誤變小。所以模型應該把 v1 調低。",
+        activeNodes: ["a1Node", "yhatNode"],
+        activeEdges: ["v1Edge"],
+        edgeColors: { v1Edge: "green" },
+        flow: { v1Edge: "v1 變小" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.87" },
+        result: "ŷ：0.95 → 0.87",
+        truth: true,
+        loss: "0.7569",
+        lossWidth: 76,
+        formula: "如果 v1：1.0 → 0.9\n\nŷ：0.95 → 0.87\nLoss：0.9025 → 0.7569",
+        compare: [
+          ["情況", "v1", "ŷ", "Loss", "header"],
+          ["v1 調低", "0.9", "0.87", "0.7569", "good"],
+          ["原本", "1.0", "0.95", "0.9025", ""],
+          ["v1 調高", "1.1", "1.03", "1.0609", "bad"]
+        ],
+        loop: "故事版：O 以後要少聽 a1 一點。"
+      },
+      {
+        title: "正式更新 v1",
+        text: "更新權重，就是修正模型保存下來的經驗值。\n注意：不是改 a1，而是改 v1。",
+        concept: "a1 是這次算出來的中間判斷；v1 才是會被保存下來的權重。",
+        activeNodes: ["a1Node", "yhatNode"],
+        activeEdges: ["v1Edge"],
+        edgeColors: { v1Edge: "green" },
+        flow: { v1Edge: "少聽 a1" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.87" },
+        result: "v1：1.0 → 0.85",
+        truth: true,
+        loss: "0.7569",
+        lossWidth: 76,
+        formula: "v1：1.0 → 0.85\n\n線條 a1 → ŷ 變細。\n意思：少相信 a1。",
+        compare: [],
+        loop: "這一步叫權重更新。"
+      },
+      {
+        title: "再往前檢討 w11",
+        text: "為什麼 a1 這麼相信他是車手？\n如果 a1 主要被 x1 影響，就要檢查 w11。",
+        concept: "倒傳遞會一層一層往回傳。",
+        activeNodes: ["x1Node", "a1Node"],
+        activeEdges: ["w11Edge"],
+        edgeColors: { w11Edge: "red" },
+        flowMode: "backward",
+        flow: { w11Edge: "檢討 w11" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.95", a2Value: "0.30", yhatValue: "0.87" },
+        result: "檢查 x1 → a1",
+        truth: true,
+        loss: "0.7569",
+        lossWidth: 76,
+        formula: "x1 = 0.8\nw11 = 1.0\na1 = 0.95\n\n問題：a1 為什麼這麼高？",
+        compare: [],
+        loop: "故事版：a1 不要只因為車速快，就太快判斷他像車手。"
+      },
+      {
+        title: "測試 w11 的影響",
+        text: "如果把 w11 調低，a1 就不會那麼被車速 x1 影響。",
+        concept: "w11 調低後，車速對 a1 的影響變小。",
+        activeNodes: ["x1Node", "a1Node"],
+        activeEdges: ["w11Edge"],
+        edgeColors: { w11Edge: "green" },
+        flow: { w11Edge: "w11 變小" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.79", a2Value: "0.30", yhatValue: "0.87" },
+        result: "a1：0.95 → 0.79",
+        truth: true,
+        loss: "0.7569",
+        lossWidth: 76,
+        formula: "原本：\na1 = 1.0 × 0.8 + 0.5 × 0.3 = 0.95\n\nw11 調低到 0.8：\na1 = 0.8 × 0.8 + 0.5 × 0.3\na1 = 0.64 + 0.15 = 0.79",
+        compare: [],
+        loop: "這表示模型少相信「車速快」這條影響。"
+      },
+      {
+        title: "正式更新 w11",
+        text: "模型不只調整最後輸出，也調整前面線索到中間判斷的權重。",
+        concept: "w11：降低車速對 a1 的影響。",
+        activeNodes: ["x1Node", "a1Node"],
+        activeEdges: ["w11Edge"],
+        edgeColors: { w11Edge: "green" },
+        flow: { w11Edge: "降低影響" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.79", a2Value: "0.30", yhatValue: "0.87" },
+        result: "w11：1.0 → 0.8",
+        truth: true,
+        loss: "0.7569",
+        lossWidth: 76,
+        formula: "w11：1.0 → 0.8\n\n線條 x1 → a1 變細。\n意思：降低車速對 a1 的影響。",
+        compare: [],
+        loop: "這讓學生看到：錯誤會往前傳回去。"
+      },
+      {
+        title: "重新跑一次前向傳播",
+        text: "用更新後的權重再算一次。\n這次預測變低，Loss 也變小。",
+        concept: "更新權重後，下次遇到類似資料時，模型的判斷會改變。",
+        activeNodes: nodeIds,
+        activeEdges: edgeIds,
+        edgeColors: { w11Edge: "green", v1Edge: "green", outEdge: "green" },
+        flow: { w11Edge: "新 w11", w21Edge: "0.15", v1Edge: "新 v1", v2Edge: "0.15", outEdge: "ŷ=0.70" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.79", a2Value: "0.30", yhatValue: "0.70" },
+        result: "ŷ：0.95 → 0.70",
+        truth: true,
+        loss: "0.49",
+        lossWidth: 49,
+        formula: "更新後：\nv1 = 0.85\nw11 = 0.8\n\nŷ：0.95 → 0.70\nLoss：0.9025 → 0.49",
+        compare: [],
+        loop: "不是背答案，而是改變權重。"
+      },
+      {
+        title: "總結整個學習循環",
+        text: "神經網路的學習，就是不斷重複這個循環。",
+        concept: "輸入線索 → 加權計算 → 產生預測 → 比較真實答案 → 計算錯誤 → 倒傳遞檢討 → 更新權重。",
+        activeNodes: nodeIds,
+        activeEdges: edgeIds,
+        edgeColors: { outEdge: "green" },
+        values: { x1Value: "0.8", x2Value: "0.3", a1Value: "0.79", a2Value: "0.30", yhatValue: "0.70" },
+        result: "下一次更準",
+        truth: false,
+        loss: "0.49",
+        lossWidth: 49,
+        formula: "學習循環：\n\n1. 輸入線索\n2. 加權計算\n3. 產生預測\n4. 比較真實答案\n5. 計算錯誤\n6. 倒傳遞檢討\n7. 更新權重",
+        compare: [],
+        loop: "這就是模型訓練的基本原理。"
+      }
+    ];
+
+    function createFlows() {
+      const svg = document.querySelector("svg");
+      edgeIds.forEach((id) => {
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("id", `${id}Flow`);
+        g.setAttribute("class", "flow blue");
+
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", "-58");
+        rect.setAttribute("y", "-17");
+        rect.setAttribute("width", "116");
+        rect.setAttribute("height", "34");
+        rect.setAttribute("rx", "17");
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", "0");
+        text.setAttribute("y", "1");
+
+        g.appendChild(rect);
+        g.appendChild(text);
+        svg.appendChild(g);
+        flows[id] = { g, text };
+      });
+    }
+
+    function pathMidpoint(path) {
+      const match = path.match(/^M\s*([\d.]+)\s*([\d.]+)\s*L\s*([\d.]+)\s*([\d.]+)$/);
+      if (!match) return { x: 0, y: 0 };
+      return {
+        x: (Number(match[1]) + Number(match[3])) / 2,
+        y: (Number(match[2]) + Number(match[4])) / 2
+      };
+    }
+
+    function applyStep(index) {
+      current = index;
+      const step = steps[index];
+      document.getElementById("progressText").textContent = `${index + 1} / ${steps.length}`;
+      document.getElementById("stepLabel").textContent = `第 ${index + 1} 步`;
+      document.getElementById("stepTitle").textContent = step.title;
+      document.getElementById("stepText").textContent = step.text;
+      document.getElementById("conceptBox").textContent = step.concept;
+      document.getElementById("formulaBox").textContent = step.formula;
+      document.getElementById("loopBox").textContent = step.loop || "";
+
+      valueIds.forEach((id) => {
+        document.getElementById(id).textContent = step.values?.[id] || "等待";
+      });
+
+      nodeIds.forEach((id) => document.getElementById(id).classList.toggle("active", step.activeNodes?.includes(id)));
+      edgeIds.forEach((id) => {
+        const edge = document.getElementById(id);
+        edge.className.baseVal = "edge";
+        if (step.activeEdges?.includes(id)) edge.classList.add("active");
+        const color = step.edgeColors?.[id];
+        if (color) edge.classList.add(color);
+        updateFlow(id, step);
+      });
+
+      setCard("resultCard", Boolean(step.result));
+      setCard("truthCard", Boolean(step.truth));
+      setCard("lossCard", Boolean(step.loss));
+      document.getElementById("resultValue").textContent = step.result || "";
+      document.getElementById("lossValue").textContent = step.loss || "";
+      document.getElementById("lossFill").style.width = `${step.lossWidth || 0}%`;
+      renderCompare(step.compare || []);
+      document.getElementById("prevBtn").disabled = index === 0;
+      document.getElementById("nextBtn").textContent = index === steps.length - 1 ? "完成" : "下一步";
+    }
+
+    function setCard(id, visible) {
+      document.getElementById(id).classList.toggle("hidden", !visible);
+    }
+
+    function updateFlow(id, step) {
+      const flow = flows[id];
+      const label = step.flow?.[id];
+      const visible = Boolean(label);
+      const color = step.edgeColors?.[id] || "blue";
+      flow.g.setAttribute("class", `flow ${visible ? "visible" : ""} ${color}`);
+      flow.text.textContent = label || "";
+      const path = document.getElementById(id).getAttribute("d");
+      const point = pathMidpoint(path);
+      flow.g.setAttribute("transform", `translate(${point.x} ${point.y})`);
+    }
+
+    function renderCompare(rows) {
+      const box = document.getElementById("compareBox");
+      box.replaceChildren();
+      rows.forEach(([a, b, c, d, kind]) => {
+        const row = document.createElement("div");
+        row.className = `compare-row ${kind || ""}`;
+        [a, b, c, d].forEach((text) => {
+          const cell = document.createElement("div");
+          cell.textContent = text;
+          row.appendChild(cell);
+        });
+        box.appendChild(row);
+      });
+    }
+
+    document.getElementById("prevBtn").addEventListener("click", () => applyStep(Math.max(0, current - 1)));
+    document.getElementById("nextBtn").addEventListener("click", () => applyStep(Math.min(steps.length - 1, current + 1)));
+    document.getElementById("resetBtn").addEventListener("click", () => applyStep(0));
+
+    createFlows();
+    window.demoGoTo = applyStep;
+    applyStep(0);
+  </script>
+</body>
+</html>
